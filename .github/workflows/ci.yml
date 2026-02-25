@@ -7,6 +7,26 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: njangi
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U postgres -d njangi"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      API_KEY: njangi_dev_123456
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/njangi?schema=public
+
     steps:
       - uses: actions/checkout@v4
 
@@ -17,6 +37,12 @@ jobs:
 
       - name: Install deps
         run: npm ci
+
+      - name: Prisma generate
+        run: npm run prisma:generate
+
+      - name: Prisma migrate deploy
+        run: npm run prisma:migrate:deploy
 
       - name: Typecheck
         run: npm run typecheck
