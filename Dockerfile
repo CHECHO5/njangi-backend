@@ -1,9 +1,8 @@
 # Build stage
-FROM node:20-bullseye-slim AS build
+FROM node:20-bookworm-slim AS build
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y openssl ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 COPY package*.json ./
 RUN npm ci
@@ -12,26 +11,26 @@ COPY prisma ./prisma
 COPY src ./src
 COPY tsconfig.json ./
 
-# Generate Prisma client (important!)
+# Generate Prisma client for the build environment (safe)
 RUN npx prisma generate
 
-# Build TS -> dist
 RUN npm run build
 
-
 # Runtime stage
-FROM node:20-bullseye-slim
+FROM node:20-bookworm-slim
 WORKDIR /app
+
+RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 ENV NODE_ENV=production
 
-RUN apt-get update && apt-get install -y openssl ca-certificates \
-  && rm -rf /var/lib/apt/lists/*
+COPY package*.json ./
+RUN npm ci --omit=dev
 
-# Copy deps from build stage (keeps generated Prisma client)
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/package*.json ./
-COPY --from=build /app/dist ./dist
+# Prisma schema must exist before we generate the client in runtime image
 COPY --from=build /app/prisma ./prisma
+RUN npx prisma generate
+
+COPY --from=build /app/dist ./dist
 
 EXPOSE 8080
 CMD ["node", "dist/server.js"]
